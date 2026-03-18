@@ -91,6 +91,10 @@ const fontPreviewNames = reactive({
   en: '',
 })
 
+// 预览控制
+const previewWeight = ref(400)
+const previewSize = ref(20)
+
 const loadFontForPreview = async (type: 'ch' | 'tc' | 'en', file: File) => {
   try {
     const fontName = `PreviewFont-${type}-${Date.now()}`
@@ -871,10 +875,80 @@ onMounted(() => {
                   <Type :size="18" class="text-primary" />
                   <span class="text-sm font-bold">字体预览</span>
                 </div>
-                <div class="flex gap-2">
+                <div class="flex items-center gap-4">
+                  <!-- 字重控制 -->
+                  <div
+                    class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-background/50 border border-border/40"
+                  >
+                    <span class="text-[10px] font-bold text-muted-foreground uppercase opacity-70"
+                      >字重</span
+                    >
+                    <input
+                      type="range"
+                      v-model="previewWeight"
+                      min="100"
+                      max="900"
+                      step="100"
+                      class="w-20 h-1 bg-primary/20 rounded-lg appearance-none cursor-pointer accent-primary"
+                    />
+                    <span class="text-[10px] font-mono text-primary w-6">{{ previewWeight }}</span>
+                  </div>
+                  <!-- 字号控制 -->
+                  <div
+                    class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-background/50 border border-border/40"
+                  >
+                    <span class="text-[10px] font-bold text-muted-foreground uppercase opacity-70"
+                      >字号</span
+                    >
+                    <input
+                      type="range"
+                      v-model="previewSize"
+                      min="12"
+                      max="48"
+                      step="1"
+                      class="w-20 h-1 bg-primary/20 rounded-lg appearance-none cursor-pointer accent-primary"
+                    />
+                    <span class="text-[10px] font-mono text-primary w-6">{{ previewSize }}px</span>
+                  </div>
                   <Badge variant="secondary" class="text-[10px] font-normal opacity-70">
                     仅供效果展示
                   </Badge>
+                </div>
+              </div>
+
+              <!-- 移动端滑块 (仅在小屏幕显示) -->
+              <div class="sm:hidden grid grid-cols-2 gap-3 pb-2 border-b border-border/40">
+                <div class="space-y-1.5">
+                  <div
+                    class="flex justify-between items-center text-[10px] font-bold text-muted-foreground uppercase"
+                  >
+                    <span>字重</span>
+                    <span class="text-primary font-mono">{{ previewWeight }}</span>
+                  </div>
+                  <input
+                    type="range"
+                    v-model="previewWeight"
+                    min="100"
+                    max="900"
+                    step="100"
+                    class="w-full h-1 bg-primary/20 rounded-lg appearance-none cursor-pointer accent-primary"
+                  />
+                </div>
+                <div class="space-y-1.5">
+                  <div
+                    class="flex justify-between items-center text-[10px] font-bold text-muted-foreground uppercase"
+                  >
+                    <span>字号</span>
+                    <span class="text-primary font-mono">{{ previewSize }}px</span>
+                  </div>
+                  <input
+                    type="range"
+                    v-model="previewSize"
+                    min="12"
+                    max="48"
+                    step="1"
+                    class="w-full h-1 bg-primary/20 rounded-lg appearance-none cursor-pointer accent-primary"
+                  />
                 </div>
               </div>
 
@@ -910,10 +984,14 @@ onMounted(() => {
                     }}</span>
                   </div>
                   <div
-                    :style="{ fontFamily: fontPreviewNames.ch || 'inherit' }"
-                    class="p-3 sm:p-4 rounded-lg bg-background border border-border/50 text-xl sm:text-2xl break-all transition-all"
+                    :style="{
+                      fontFamily: fontPreviewNames.ch || 'inherit',
+                      fontWeight: previewWeight,
+                      fontSize: previewSize + 'px',
+                    }"
+                    class="p-3 sm:p-4 rounded-lg bg-background border border-border/50 break-all transition-all leading-normal"
                   >
-                    永和九年，岁在癸丑，暮春之初。
+                    永和九年，岁在癸丑，暮春之初，会于会稽山阴之兰亭。
                   </div>
                 </div>
 
@@ -947,10 +1025,12 @@ onMounted(() => {
                   <div
                     :style="{
                       fontFamily: fontPreviewNames.tc || fontPreviewNames.ch || 'inherit',
+                      fontWeight: previewWeight,
+                      fontSize: previewSize + 'px',
                     }"
-                    class="p-3 sm:p-4 rounded-lg bg-background border border-border/50 text-xl sm:text-2xl break-all transition-all"
+                    class="p-3 sm:p-4 rounded-lg bg-background border border-border/50 break-all transition-all leading-normal"
                   >
-                    憂郁的臺灣烏龜，尋找綠色龜殼。
+                    落霞與孤鶩齊飛，秋水共長天一色。
                   </div>
                 </div>
 
@@ -984,10 +1064,12 @@ onMounted(() => {
                   <div
                     :style="{
                       fontFamily: fontPreviewNames.en || fontPreviewNames.ch || 'inherit',
+                      fontWeight: previewWeight,
+                      fontSize: previewSize + 'px',
                     }"
-                    class="p-3 sm:p-4 rounded-lg bg-background border border-border/50 text-xl sm:text-2xl break-all transition-all"
+                    class="p-3 sm:p-4 rounded-lg bg-background border border-border/50 break-all transition-all leading-normal"
                   >
-                    ABCDEFG abcdefg 1234567890
+                    The quick brown fox jumps over the lazy dog. 1234567890
                   </div>
                 </div>
               </div>
