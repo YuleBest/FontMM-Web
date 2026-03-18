@@ -77,12 +77,42 @@ const uploadedFiles = reactive({
   en: null as File | null,
 })
 
-// 拖放状态
+// 拖动状态
 const dragStates = reactive({
   ch: false,
   tc: false,
   en: false,
 })
+
+// 字体预览状态
+const fontPreviewNames = reactive({
+  ch: '',
+  tc: '',
+  en: '',
+})
+
+const loadFontForPreview = async (type: 'ch' | 'tc' | 'en', file: File) => {
+  try {
+    const fontName = `PreviewFont-${type}-${Date.now()}`
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      const arrayBuffer = e.target?.result as ArrayBuffer
+      if (!arrayBuffer) return
+
+      const fontFace = new FontFace(fontName, arrayBuffer)
+      await fontFace.load()
+      document.fonts.add(fontFace)
+      fontPreviewNames[type] = fontName
+    }
+    reader.readAsArrayBuffer(file)
+  } catch (error) {
+    console.error(`加载预览字体 ${type} 失败:`, error)
+  }
+}
+
+const cleanupFontPreview = (type: 'ch' | 'tc' | 'en') => {
+  fontPreviewNames[type] = ''
+}
 
 // module.prop 结构化编辑
 interface ModulePropFields {
@@ -122,7 +152,7 @@ const rawModuleProp = ref('')
 const toggleSourceMode = () => {
   if (sourceMode.value) {
     // 从源代码切回表单：解析 textarea 内容回写到 fields
-    parseModuleProp(rawModuleProp.value)
+    parseModuleProp(rawModuleProp.value, true)
     sourceMode.value = false
   } else {
     // 从表单切到源代码：序列化 fields 到 textarea
@@ -274,7 +304,12 @@ const extractModuleProp = async () => {
   }
 }
 
-const parseModuleProp = (content: string) => {
+const parseModuleProp = (content: string, clearFirst = false) => {
+  if (clearFirst) {
+    Object.keys(modulePropFields).forEach((key) => {
+      ;(modulePropFields as Record<string, string>)[key] = ''
+    })
+  }
   const lines = content.split('\n')
   for (const line of lines) {
     const trimmed = line.trim()
@@ -300,22 +335,24 @@ const resetModuleProp = () => {
 }
 
 // --- 文件上传处理 ---
-const handleFileUpload = (event: Event, type: 'ch' | 'tc' | 'en') => {
+const handleFileUpload = async (event: Event, type: 'ch' | 'tc' | 'en') => {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
   if (file) {
     uploadedFiles[type] = file
     addToast('success', `已上传 ${getTypeName(type)} (${formatFileSize(file.size)})`)
+    await loadFontForPreview(type, file)
   }
 }
 
-const handleDrop = (event: DragEvent, type: 'ch' | 'tc' | 'en') => {
+const handleDrop = async (event: DragEvent, type: 'ch' | 'tc' | 'en') => {
   event.preventDefault()
   dragStates[type] = false
   const file = event.dataTransfer?.files[0]
   if (file && (file.name.endsWith('.ttf') || file.name.endsWith('.otf'))) {
     uploadedFiles[type] = file
     addToast('success', `已上传 ${getTypeName(type)} (${formatFileSize(file.size)})`)
+    await loadFontForPreview(type, file)
   } else {
     addToast('error', '请拖入 .ttf 或 .otf 格式的字体文件')
   }
@@ -332,6 +369,7 @@ const handleDragLeave = (type: 'ch' | 'tc' | 'en') => {
 
 const removeFile = (type: 'ch' | 'tc' | 'en') => {
   uploadedFiles[type] = null
+  cleanupFontPreview(type)
   addToast('info', `已移除 ${getTypeName(type)}`)
 }
 
@@ -355,6 +393,29 @@ const startPacking = async () => {
   if (!templateZip.value) {
     addToast('error', '请先下载模板')
     return
+  }
+
+  // 1. 同步编辑器数据（如果处于源码模式）
+  if (sourceMode.value) {
+    parseModuleProp(rawModuleProp.value, true)
+  }
+
+  // 2. 验证 module.prop 字段
+  const emptyKeys: Record<string, string> = {
+    id: 'ID',
+    name: '名称',
+    version: '版本号',
+    versionCode: '版本代码',
+    author: '作者',
+    description: '描述',
+  }
+
+  for (const [key, label] of Object.entries(emptyKeys)) {
+    const val = modulePropFields[key as keyof typeof modulePropFields]
+    if (typeof val === 'string' && !val.trim()) {
+      addToast('error', `模块信息错误：[${label}] 不能为空`)
+      return
+    }
   }
 
   try {
@@ -641,6 +702,9 @@ onMounted(() => {
                   中文简体 (ch.ttf)
                   <Badge variant="destructive" class="text-[10px] px-1.5 py-0">必选</Badge>
                 </label>
+                <p class="text-[11px] text-muted-foreground leading-tight">
+                  核心字体，作为模块的基础资源
+                </p>
                 <input
                   :id="'file-ch'"
                   type="file"
@@ -694,6 +758,9 @@ onMounted(() => {
                   中文繁体 (tc.ttf)
                   <Badge variant="outline" class="text-[10px] px-1.5 py-0">可选</Badge>
                 </label>
+                <p class="text-[11px] text-muted-foreground leading-tight">
+                  未上传时将自动使用 ch.ttf 替换
+                </p>
                 <input
                   :id="'file-tc'"
                   type="file"
@@ -745,6 +812,9 @@ onMounted(() => {
                   英文&数字 (en.ttf)
                   <Badge variant="outline" class="text-[10px] px-1.5 py-0">可选</Badge>
                 </label>
+                <p class="text-[11px] text-muted-foreground leading-tight">
+                  未上传时将自动使用 ch.ttf 替换
+                </p>
                 <input
                   :id="'file-en'"
                   type="file"
@@ -787,6 +857,138 @@ onMounted(() => {
                   >
                     <Trash2 :size="14" class="text-green-600 dark:text-green-400" />
                   </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Font Preview Panel -->
+            <div
+              v-if="uploadedFiles.ch || uploadedFiles.tc || uploadedFiles.en"
+              class="mt-6 p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-4 animate-in fade-in slide-in-from-top-2 duration-500"
+            >
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <Type :size="18" class="text-primary" />
+                  <span class="text-sm font-bold">字体预览</span>
+                </div>
+                <div class="flex gap-2">
+                  <Badge variant="secondary" class="text-[10px] font-normal opacity-70">
+                    仅供效果展示
+                  </Badge>
+                </div>
+              </div>
+
+              <!-- Fallback Tip -->
+              <div
+                v-if="uploadedFiles.ch && (!uploadedFiles.tc || !uploadedFiles.en)"
+                class="flex items-start gap-2 p-2.5 rounded-lg bg-orange-500/5 border border-orange-500/20 text-orange-600 dark:text-orange-400 text-[11px] leading-tight"
+              >
+                <Info :size="14" class="shrink-0 mt-0.5" />
+                <p>
+                  温馨提示：由于您未上传
+                  {{
+                    !uploadedFiles.tc && !uploadedFiles.en
+                      ? '繁体和英文'
+                      : !uploadedFiles.tc
+                        ? '繁体'
+                        : '英文'
+                  }}
+                  字体，打包程序将自动使用
+                  <span class="font-bold underline">中文简体</span> 字体进行填充。
+                </p>
+              </div>
+
+              <div class="grid gap-4">
+                <!-- ch preview -->
+                <div v-if="uploadedFiles.ch" class="space-y-2">
+                  <div class="flex items-center justify-between">
+                    <p class="text-[10px] text-muted-foreground uppercase tracking-wider font-bold">
+                      中文简体 (ch)
+                    </p>
+                    <span class="text-[10px] text-primary/60 font-mono">{{
+                      fontPreviewNames.ch ? '已载入' : '加载中...'
+                    }}</span>
+                  </div>
+                  <div
+                    :style="{ fontFamily: fontPreviewNames.ch || 'inherit' }"
+                    class="p-3 sm:p-4 rounded-lg bg-background border border-border/50 text-xl sm:text-2xl break-all transition-all"
+                  >
+                    永和九年，岁在癸丑，暮春之初。
+                  </div>
+                </div>
+
+                <!-- tc preview (shown if ch exists) -->
+                <div v-if="uploadedFiles.ch || uploadedFiles.tc" class="space-y-2">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <p
+                        class="text-[10px] text-muted-foreground uppercase tracking-wider font-bold"
+                      >
+                        中文繁体 (tc)
+                      </p>
+                      <Badge
+                        v-if="!uploadedFiles.tc"
+                        variant="outline"
+                        class="h-4 text-[9px] px-1 border-orange-500/30 text-orange-500"
+                      >
+                        使用简体回退
+                      </Badge>
+                    </div>
+                    <span class="text-[10px] text-primary/60 font-mono">
+                      {{
+                        uploadedFiles.tc
+                          ? fontPreviewNames.tc
+                            ? '已载入'
+                            : '加载中...'
+                          : '回退模式'
+                      }}
+                    </span>
+                  </div>
+                  <div
+                    :style="{
+                      fontFamily: fontPreviewNames.tc || fontPreviewNames.ch || 'inherit',
+                    }"
+                    class="p-3 sm:p-4 rounded-lg bg-background border border-border/50 text-xl sm:text-2xl break-all transition-all"
+                  >
+                    憂郁的臺灣烏龜，尋找綠色龜殼。
+                  </div>
+                </div>
+
+                <!-- en preview (shown if ch exists) -->
+                <div v-if="uploadedFiles.ch || uploadedFiles.en" class="space-y-2">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <p
+                        class="text-[10px] text-muted-foreground uppercase tracking-wider font-bold"
+                      >
+                        英文 & 数字 (en)
+                      </p>
+                      <Badge
+                        v-if="!uploadedFiles.en"
+                        variant="outline"
+                        class="h-4 text-[9px] px-1 border-orange-500/30 text-orange-500"
+                      >
+                        使用简体回退
+                      </Badge>
+                    </div>
+                    <span class="text-[10px] text-primary/60 font-mono">
+                      {{
+                        uploadedFiles.en
+                          ? fontPreviewNames.en
+                            ? '已载入'
+                            : '加载中...'
+                          : '回退模式'
+                      }}
+                    </span>
+                  </div>
+                  <div
+                    :style="{
+                      fontFamily: fontPreviewNames.en || fontPreviewNames.ch || 'inherit',
+                    }"
+                    class="p-3 sm:p-4 rounded-lg bg-background border border-border/50 text-xl sm:text-2xl break-all transition-all"
+                  >
+                    ABCDEFG abcdefg 1234567890
+                  </div>
                 </div>
               </div>
             </div>
@@ -853,7 +1055,12 @@ onMounted(() => {
             <div v-else class="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2">
               <!-- id -->
               <div class="space-y-1.5">
-                <label class="text-xs sm:text-sm font-medium text-foreground">ID</label>
+                <label
+                  class="text-xs sm:text-sm font-medium text-foreground flex items-center gap-1"
+                >
+                  ID
+                  <span class="text-destructive">*</span>
+                </label>
                 <input
                   v-model="modulePropFields.id"
                   type="text"
@@ -864,7 +1071,12 @@ onMounted(() => {
               </div>
               <!-- name -->
               <div class="space-y-1.5">
-                <label class="text-xs sm:text-sm font-medium text-foreground">名称</label>
+                <label
+                  class="text-xs sm:text-sm font-medium text-foreground flex items-center gap-1"
+                >
+                  名称
+                  <span class="text-destructive">*</span>
+                </label>
                 <input
                   v-model="modulePropFields.name"
                   type="text"
@@ -875,7 +1087,12 @@ onMounted(() => {
               </div>
               <!-- version -->
               <div class="space-y-1.5">
-                <label class="text-xs sm:text-sm font-medium text-foreground">版本号</label>
+                <label
+                  class="text-xs sm:text-sm font-medium text-foreground flex items-center gap-1"
+                >
+                  版本号
+                  <span class="text-destructive">*</span>
+                </label>
                 <input
                   v-model="modulePropFields.version"
                   type="text"
@@ -885,7 +1102,12 @@ onMounted(() => {
               </div>
               <!-- versionCode -->
               <div class="space-y-1.5">
-                <label class="text-xs sm:text-sm font-medium text-foreground">版本代码</label>
+                <label
+                  class="text-xs sm:text-sm font-medium text-foreground flex items-center gap-1"
+                >
+                  版本代码
+                  <span class="text-destructive">*</span>
+                </label>
                 <input
                   v-model="modulePropFields.versionCode"
                   type="number"
@@ -897,7 +1119,12 @@ onMounted(() => {
               </div>
               <!-- author -->
               <div class="space-y-1.5">
-                <label class="text-xs sm:text-sm font-medium text-foreground">作者</label>
+                <label
+                  class="text-xs sm:text-sm font-medium text-foreground flex items-center gap-1"
+                >
+                  作者
+                  <span class="text-destructive">*</span>
+                </label>
                 <input
                   v-model="modulePropFields.author"
                   type="text"
@@ -907,7 +1134,12 @@ onMounted(() => {
               </div>
               <!-- description -->
               <div class="space-y-1.5 sm:col-span-2">
-                <label class="text-xs sm:text-sm font-medium text-foreground">描述</label>
+                <label
+                  class="text-xs sm:text-sm font-medium text-foreground flex items-center gap-1"
+                >
+                  描述
+                  <span class="text-destructive">*</span>
+                </label>
                 <input
                   v-model="modulePropFields.description"
                   type="text"
