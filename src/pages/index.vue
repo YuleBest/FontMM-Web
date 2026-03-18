@@ -103,7 +103,7 @@ const loadFontForPreview = async (type: 'ch' | 'tc' | 'en', file: File) => {
       const arrayBuffer = e.target?.result as ArrayBuffer
       if (!arrayBuffer) return
 
-      const fontFace = new FontFace(fontName, arrayBuffer, { weight: '100 900' })
+      const fontFace = new FontFace(fontName, arrayBuffer, { weight: '1 1000' })
       await fontFace.load()
       document.fonts.add(fontFace)
       fontPreviewNames[type] = fontName
@@ -886,12 +886,12 @@ onMounted(() => {
                     <input
                       type="range"
                       v-model="previewWeight"
-                      min="100"
-                      max="900"
-                      step="100"
+                      min="1"
+                      max="1000"
+                      step="1"
                       class="w-20 h-1 bg-primary/20 rounded-lg appearance-none cursor-pointer accent-primary"
                     />
-                    <span class="text-[10px] font-mono text-primary w-6">{{ previewWeight }}</span>
+                    <span class="text-[10px] font-mono text-primary w-8">{{ previewWeight }}</span>
                   </div>
                   <!-- 字号控制 -->
                   <div
@@ -928,9 +928,9 @@ onMounted(() => {
                   <input
                     type="range"
                     v-model="previewWeight"
-                    min="100"
-                    max="900"
-                    step="100"
+                    min="1"
+                    max="1000"
+                    step="1"
                     class="w-full h-1 bg-primary/20 rounded-lg appearance-none cursor-pointer accent-primary"
                   />
                 </div>
