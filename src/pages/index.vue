@@ -103,7 +103,7 @@ const loadFontForPreview = async (type: 'ch' | 'tc' | 'en', file: File) => {
       const arrayBuffer = e.target?.result as ArrayBuffer
       if (!arrayBuffer) return
 
-      const fontFace = new FontFace(fontName, arrayBuffer)
+      const fontFace = new FontFace(fontName, arrayBuffer, { weight: '100 900' })
       await fontFace.load()
       document.fonts.add(fontFace)
       fontPreviewNames[type] = fontName
